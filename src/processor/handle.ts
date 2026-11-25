@@ -1,24 +1,45 @@
 import type { Pool } from "../db/pool.ts";
+import { decodeEvent } from "../events/schema.ts";
 import { TARGET_STATUS, type ShipmentEvent } from "../events/types.ts";
 import type { Logger } from "../log.ts";
+import { sendToDlq, type DlqSink } from "./dlq.ts";
 
 export interface RawMessage {
-  value: Buffer | null;
+  topic: string;
   partition: number;
   offset: string;
   timestamp: string;
+  key: string | null;
+  value: Buffer | null;
+  headers: Record<string, string>;
 }
 
 export interface Deps {
   pool: Pool;
   log: Logger;
+  dlq: DlqSink;
 }
 
-export type Outcome = "applied";
+export type Outcome = "applied" | "dlq";
 
-/** Step 1: the simplest thing that works. Parse, overwrite the status, append history. */
 export async function handleMessage(deps: Deps, msg: RawMessage): Promise<Outcome> {
-  const event = JSON.parse(String(msg.value)) as ShipmentEvent;
+  const decoded = decodeEvent(msg.value, msg.key);
+  if (!decoded.ok) {
+    const where = await sendToDlq(deps.pool, deps.dlq, {
+      reason: decoded.reason,
+      detail: { issues: decoded.issues },
+      shipmentId: decoded.shipmentId,
+      eventId: decoded.eventId,
+      source: { topic: msg.topic, partition: msg.partition, offset: msg.offset, key: msg.key, value: String(msg.value ?? ""), headers: msg.headers },
+    });
+    deps.log.warn({ reason: decoded.reason, issues: decoded.issues, partition: msg.partition, offset: msg.offset, dlq: where }, "dead-lettered");
+    return "dlq";
+  }
+  await applyEvent(deps, decoded.event, msg);
+  return "applied";
+}
+
+async function applyEvent(deps: Deps, event: ShipmentEvent, msg: RawMessage): Promise<void> {
   const to = TARGET_STATUS[event.type];
   const client = await deps.pool.connect();
   try {
@@ -44,5 +65,4 @@ export async function handleMessage(deps: Deps, msg: RawMessage): Promise<Outcom
     client.release();
   }
   deps.log.info({ shipmentId: event.shipmentId, eventId: event.eventId, partition: msg.partition, offset: msg.offset, to }, "applied");
-  return "applied";
 }

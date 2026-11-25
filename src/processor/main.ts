@@ -7,7 +7,7 @@ import { startProcessor } from "./consumer.ts";
 
 const pool = createPool();
 await migrate(pool);
-const proc = await startProcessor({ pool, log }, { brokers: config.kafkaBrokers, topic: config.eventsTopic, groupId: config.consumerGroup });
+const proc = await startProcessor({ pool, log }, { brokers: config.kafkaBrokers, topic: config.eventsTopic, dlqTopic: config.dlqTopic, groupId: config.consumerGroup });
 
 const server = http.createServer((req, res) => {
   if (req.url === "/healthz") {
