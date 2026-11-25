@@ -21,6 +21,15 @@ export async function ensureTopics(kafka: kafkajs.Kafka, topics: string[], numPa
     const missing = topics.filter((t) => !existing.has(t));
     if (missing.length > 0) {
       await admin.createTopics({ waitForLeaders: true, topics: missing.map((topic) => ({ topic, numPartitions, replicationFactor: 1 })) });
+      // createTopics can return before every partition has a leader that the broker will serve;
+      // a produce in that window fails with "This server does not host this topic-partition".
+      const deadline = Date.now() + 15_000;
+      for (;;) {
+        const md = await admin.fetchTopicMetadata({ topics: missing }).catch(() => undefined);
+        const ready = md?.topics.every((t) => t.partitions.length === numPartitions && t.partitions.every((p) => p.leader >= 0));
+        if (ready || Date.now() > deadline) break;
+        await new Promise((r) => setTimeout(r, 100));
+      }
     }
   } finally {
     await admin.disconnect();

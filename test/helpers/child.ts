@@ -13,7 +13,7 @@ export interface Child {
 }
 
 /** Runs the real processor entrypoint as a separate OS process, pointed at the test topics and database. */
-export function spawnProcessor(names: { topic: string; dlqTopic: string; group: string }, extraEnv: Record<string, string> = {}): Child {
+export function spawnProcessor(names: { topic: string; dlqTopic: string; group: string }, downstreamUrl: string, extraEnv: Record<string, string> = {}): Child {
   let buf = "";
   const proc = spawn(process.execPath, ["src/processor/main.ts"], {
     cwd: root,
@@ -27,6 +27,8 @@ export function spawnProcessor(names: { topic: string; dlqTopic: string; group: 
       PROCESSOR_PORT: "0",
       KAFKA_SESSION_TIMEOUT_MS: "6000",
       LOG_LEVEL: "info",
+      DOWNSTREAM_URL: downstreamUrl,
+      RETRY_MAX_ATTEMPTS: "4", RETRY_BASE_MS: "50", RETRY_MAX_MS: "400", DOWNSTREAM_TIMEOUT_MS: "300", RETRY_JITTER: "0",
       ...extraEnv,
     },
     stdio: ["ignore", "pipe", "pipe"],

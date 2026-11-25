@@ -4,10 +4,11 @@ import { createPool } from "../db/pool.ts";
 import { migrate } from "../db/migrate.ts";
 import { log } from "../log.ts";
 import { startProcessor } from "./consumer.ts";
+import { policyFromEnv } from "./retry.ts";
 
 const pool = createPool();
 await migrate(pool);
-const proc = await startProcessor({ pool, log }, { brokers: config.kafkaBrokers, topic: config.eventsTopic, dlqTopic: config.dlqTopic, groupId: config.consumerGroup });
+const proc = await startProcessor({ pool, log }, { brokers: config.kafkaBrokers, topic: config.eventsTopic, dlqTopic: config.dlqTopic, groupId: config.consumerGroup, downstreamUrl: config.downstreamUrl, retry: policyFromEnv() });
 
 const server = http.createServer((req, res) => {
   if (req.url === "/healthz") {

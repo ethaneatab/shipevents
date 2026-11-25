@@ -25,14 +25,14 @@ describe("worker restarts", () => {
     const id = newShipmentId("R");
     const evs = journey(id);
     const victim = evs[3]!; // the second HUB_SCAN
-    const first = spawnProcessor(h.names, { LAB_CRASH_ON_EVENT: victim.eventId });
+    const first = spawnProcessor(h.names, h.downstream.url, { LAB_CRASH_ON_EVENT: victim.eventId });
     children.push(first);
     await h.send(evs.slice(0, 4));
     const exit = await first.exited;
     expect(exit.signal).toBe("SIGKILL");
     expect(first.output()).toContain("LAB_CRASH_ON_EVENT hit");
 
-    const second = spawnProcessor(h.names);
+    const second = spawnProcessor(h.names, h.downstream.url);
     children.push(second);
     await h.send(evs.slice(4));
     await h.waitStatus(id, "DELIVERED", 40_000);
@@ -47,7 +47,7 @@ describe("worker restarts", () => {
     const all: ShipmentEvent[] = [];
     const ids = Array.from({ length: 40 }, () => newShipmentId("B"));
     for (const id of ids) all.push(...journey(id));
-    const first = spawnProcessor(h.names);
+    const first = spawnProcessor(h.names, h.downstream.url);
     children.push(first);
     const sending = h.send(all);
     // kill once roughly a third of the burst is in the database
@@ -59,7 +59,7 @@ describe("worker restarts", () => {
     await first.exited;
     await sending;
 
-    const second = spawnProcessor(h.names);
+    const second = spawnProcessor(h.names, h.downstream.url);
     children.push(second);
     await waitFor(async () => {
       const r = await h.pool.query("SELECT count(DISTINCT event_id)::int AS n FROM shipment_history WHERE shipment_id = ANY($1)", [ids]);

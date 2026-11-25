@@ -6,12 +6,19 @@ import { startProcessor, type RunningProcessor } from "../../src/processor/consu
 import type { ShipmentEvent } from "../../src/events/types.ts";
 import { sendEvents } from "../../src/sim/produce.ts";
 import { TEST_BROKERS, TEST_DB_URL, uniqueNames, waitFor } from "./env.ts";
+import { buildDownstream, defaultFaults, type FaultConfig } from "../../src/downstream/server.ts";
+import type { RetryPolicy } from "../../src/processor/retry.ts";
+
+/** Fast but real retry settings for tests: 4 attempts, 50/100/200ms backoff, 300ms per-attempt timeout. */
+export const TEST_RETRY: RetryPolicy = { maxAttempts: 4, baseDelayMs: 50, maxDelayMs: 400, timeoutMs: 300, jitter: false };
+export const TEST_RETRY_ENV = { RETRY_MAX_ATTEMPTS: "4", RETRY_BASE_MS: "50", RETRY_MAX_MS: "400", DOWNSTREAM_TIMEOUT_MS: "300", RETRY_JITTER: "0" };
 
 export interface Harness {
   names: ReturnType<typeof uniqueNames>;
   pool: Pool;
   producer: Producer;
   proc: RunningProcessor | undefined;
+  downstream: { url: string; faults: FaultConfig; stats: Record<string, number>; reset(): void };
   send(events: (ShipmentEvent | { raw: string; shipmentId: string })[], headers?: Record<string, string>): ReturnType<typeof sendEvents>;
   startProc(): Promise<void>;
   stopProc(): Promise<void>;
@@ -28,11 +35,20 @@ export async function createHarness(label: string): Promise<Harness> {
   await ensureTopics(kafka, [names.topic, names.dlqTopic]);
   const producer = createProducer(kafka);
   await producer.connect();
+  const ds = buildDownstream();
+  const url = await ds.app.listen({ port: 0, host: "127.0.0.1" });
   const h: Harness = {
     names, pool, producer, proc: undefined,
+    downstream: {
+      url, faults: ds.faults, stats: ds.stats,
+      reset() {
+        Object.assign(ds.faults, defaultFaults());
+        for (const k of Object.keys(ds.stats)) delete ds.stats[k];
+      },
+    },
     send: (events, headers) => sendEvents(producer, names.topic, events, headers),
     async startProc() {
-      h.proc = await startProcessor({ pool, log: log.child({ test: label }) }, { brokers: TEST_BROKERS, topic: names.topic, dlqTopic: names.dlqTopic, groupId: names.group });
+      h.proc = await startProcessor({ pool, log: log.child({ test: label }) }, { brokers: TEST_BROKERS, topic: names.topic, dlqTopic: names.dlqTopic, groupId: names.group, downstreamUrl: url, retry: TEST_RETRY });
     },
     async stopProc() {
       await h.proc?.stop();
@@ -53,6 +69,7 @@ export async function createHarness(label: string): Promise<Harness> {
     async close() {
       await h.stopProc();
       await producer.disconnect();
+      await ds.app.close();
       await pool.end();
     },
   };

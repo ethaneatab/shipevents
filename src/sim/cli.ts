@@ -1,4 +1,5 @@
 // Event simulator. Usage: node src/sim/cli.ts <scenario> [--shipment ID] [--count N]
+// scenarios: journey | duplicate | out-of-order | illegal | flaky | malformed
 import { parseArgs } from "node:util";
 import { config } from "../config.ts";
 import { createKafka, createProducer, ensureTopics } from "../kafka/client.ts";
@@ -44,6 +45,13 @@ for (let i = 0; i < count; i++) {
       const evs = [...journey(id), makeEvent(id, 7, "HUB_SCAN", { location: "Reno hub" })];
       const recs = await sendEvents(producer, config.eventsTopic, evs);
       console.log(JSON.stringify({ scenario, shipmentId: id, records: recs.slice(-1) }));
+      break;
+    }
+    case "flaky": {
+      // the ETA service fails the next two calls for this shipment, then recovers
+      await fetch(`${config.downstreamUrl}/faults/fail-next`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ shipmentId: id, count: 2, status: 503 }) });
+      const recs = await sendEvents(producer, config.eventsTopic, journey(id, 1));
+      console.log(JSON.stringify({ scenario, shipmentId: id, records: recs }));
       break;
     }
     case "malformed": {

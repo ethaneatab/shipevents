@@ -4,12 +4,15 @@ import type { Pool } from "../db/pool.ts";
 import type { Logger } from "../log.ts";
 import { handleMessage, type Deps, type Outcome, type RawMessage } from "./handle.ts";
 import { crashPoint, sabotaged } from "../lab/sabotage.ts";
+import type { RetryPolicy } from "./retry.ts";
 
 export interface ProcessorOptions {
   brokers: string[];
   topic: string;
   dlqTopic: string;
   groupId: string;
+  downstreamUrl: string;
+  retry: RetryPolicy;
 }
 
 export interface RunningProcessor {
@@ -32,7 +35,7 @@ export async function startProcessor(base: { pool: Pool; log: Logger }, opts: Pr
   await ensureTopics(kafka, [opts.topic, opts.dlqTopic]);
   const producer = createProducer(kafka);
   await producer.connect();
-  const deps = { ...base, dlq: { producer, topic: opts.dlqTopic } };
+  const deps: Deps = { ...base, dlq: { producer, topic: opts.dlqTopic }, downstreamUrl: opts.downstreamUrl, retry: opts.retry };
   const sessionTimeout = Number(process.env.KAFKA_SESSION_TIMEOUT_MS ?? 10000);
   const consumer = kafka.consumer({ groupId: opts.groupId, sessionTimeout, heartbeatInterval: 1000 });
   await consumer.connect();
