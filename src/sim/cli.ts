@@ -32,6 +32,20 @@ for (let i = 0; i < count; i++) {
       console.log(JSON.stringify({ scenario, shipmentId: id, duplicatedEventId: picked!.eventId, records: recs }));
       break;
     }
+    case "out-of-order": {
+      // the carrier's two hub scans arrive after OUT_FOR_DELIVERY
+      const [c, p, s1, s2, ofd] = journey(id, 5);
+      const recs = await sendEvents(producer, config.eventsTopic, [c!, p!, ofd!, s1!, s2!]);
+      console.log(JSON.stringify({ scenario, shipmentId: id, sentSeqs: [1, 2, 5, 3, 4], records: recs }));
+      break;
+    }
+    case "illegal": {
+      // a scan with a newer seq after DELIVERED: not stale, but not a legal move either
+      const evs = [...journey(id), makeEvent(id, 7, "HUB_SCAN", { location: "Reno hub" })];
+      const recs = await sendEvents(producer, config.eventsTopic, evs);
+      console.log(JSON.stringify({ scenario, shipmentId: id, records: recs.slice(-1) }));
+      break;
+    }
     case "malformed": {
       // seq should be a positive integer; the carrier sent a string
       const bad = { ...makeEvent(id, 2, "PICKED_UP"), seq: "two" };

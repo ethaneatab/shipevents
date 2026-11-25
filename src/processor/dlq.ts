@@ -1,5 +1,5 @@
 import type { Producer } from "kafkajs";
-import type { Pool } from "../db/pool.ts";
+import type { Queryable } from "../db/queryable.ts";
 
 export interface DlqSink {
   producer: Producer;
@@ -22,7 +22,7 @@ export interface DlqRecord {
  * unique (topic, partition, offset) key keeps the index at one row. The topic may hold a duplicate;
  * replay dedupes by eventId, so that is harmless.
  */
-export async function sendToDlq(pool: Pool, sink: DlqSink, rec: DlqRecord): Promise<{ partition: number; offset: string }> {
+export async function sendToDlq(db: Queryable, sink: DlqSink, rec: DlqRecord): Promise<{ partition: number; offset: string }> {
   const body = { ...rec, deadLetteredAt: new Date().toISOString() };
   const [meta] = await sink.producer.send({
     topic: sink.topic,
@@ -30,7 +30,7 @@ export async function sendToDlq(pool: Pool, sink: DlqSink, rec: DlqRecord): Prom
   });
   const partition = meta?.partition ?? -1;
   const offset = meta?.baseOffset ?? "-1";
-  await pool.query(
+  await db.query(
     `INSERT INTO dlq_entries (event_id, shipment_id, seq, reason, detail, original_key, original_value,
        source_topic, source_partition, source_offset, dlq_partition, dlq_offset)
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
