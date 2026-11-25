@@ -2,7 +2,8 @@ import type { Consumer, IHeaders, Producer } from "kafkajs";
 import { createKafka, createProducer, ensureTopics } from "../kafka/client.ts";
 import type { Pool } from "../db/pool.ts";
 import type { Logger } from "../log.ts";
-import { handleMessage, type RawMessage } from "./handle.ts";
+import { handleMessage, type Deps, type Outcome, type RawMessage } from "./handle.ts";
+import { crashPoint, sabotaged } from "../lab/sabotage.ts";
 
 export interface ProcessorOptions {
   brokers: string[];
@@ -32,16 +33,20 @@ export async function startProcessor(base: { pool: Pool; log: Logger }, opts: Pr
   const producer = createProducer(kafka);
   await producer.connect();
   const deps = { ...base, dlq: { producer, topic: opts.dlqTopic } };
-  const consumer = kafka.consumer({ groupId: opts.groupId, sessionTimeout: 10000, heartbeatInterval: 1000 });
+  const sessionTimeout = Number(process.env.KAFKA_SESSION_TIMEOUT_MS ?? 10000);
+  const consumer = kafka.consumer({ groupId: opts.groupId, sessionTimeout, heartbeatInterval: 1000 });
   await consumer.connect();
   await consumer.subscribe({ topic: opts.topic, fromBeginning: true });
   await consumer.run({
+    autoCommit: false,
     eachMessage: async ({ topic, message, partition }) => {
       const raw: RawMessage = {
         topic, partition, offset: message.offset, timestamp: message.timestamp,
         key: message.key ? message.key.toString() : null, value: message.value, headers: headersToStrings(message.headers),
       };
-      await handleMessage(deps, raw);
+      const commit = () => consumer.commitOffsets([{ topic, partition, offset: (BigInt(message.offset) + 1n).toString() }]);
+      if (sabotaged("commit_before_write")) await commitThenProcessLegacy(deps, raw, commit);
+      else await processThenCommit(deps, raw, commit);
     },
   });
   return {
@@ -52,4 +57,32 @@ export async function startProcessor(base: { pool: Pool; log: Logger }, opts: Pr
       await producer.disconnect();
     },
   };
+}
+
+// @learn:commit-order
+/** At-least-once: the database write is durable before Kafka hears "done". A crash in between means a redelivery, which dedupe absorbs. */
+export async function processThenCommit(deps: Deps, raw: RawMessage, commit: () => Promise<void>): Promise<Outcome> {
+  const outcome = await handleMessage(deps, raw);
+  crashPoint(peekEventId(raw.value));
+  await commit();
+  return outcome;
+}
+// @learn:end commit-order
+
+// @learn:commit-legacy
+/** LAB_SABOTAGE=commit_before_write. At-most-once: a crash after the commit loses the event for good. */
+export async function commitThenProcessLegacy(deps: Deps, raw: RawMessage, commit: () => Promise<void>): Promise<Outcome> {
+  await commit();
+  crashPoint(peekEventId(raw.value));
+  return handleMessage(deps, raw);
+}
+// @learn:end commit-legacy
+
+function peekEventId(value: Buffer | null): string | undefined {
+  try {
+    const v = JSON.parse(String(value)) as { eventId?: unknown };
+    return typeof v.eventId === "string" ? v.eventId : undefined;
+  } catch {
+    return undefined;
+  }
 }

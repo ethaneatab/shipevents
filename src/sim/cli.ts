@@ -25,6 +25,13 @@ for (let i = 0; i < count; i++) {
       console.log(JSON.stringify({ scenario, shipmentId: id, records: recs }));
       break;
     }
+    case "duplicate": {
+      // at-least-once upstream: PICKED_UP delivered three times, byte for byte
+      const [created, picked] = journey(id, 2);
+      const recs = await sendEvents(producer, config.eventsTopic, [created!, picked!, picked!, picked!]);
+      console.log(JSON.stringify({ scenario, shipmentId: id, duplicatedEventId: picked!.eventId, records: recs }));
+      break;
+    }
     case "malformed": {
       // seq should be a positive integer; the carrier sent a string
       const bad = { ...makeEvent(id, 2, "PICKED_UP"), seq: "two" };
