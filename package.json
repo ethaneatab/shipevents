@@ -17,7 +17,8 @@
     "processor": "node src/processor/main.ts",
     "api": "node src/api/main.ts",
     "downstream": "node src/downstream/main.ts",
-    "sim": "node src/sim/cli.ts"
+    "sim": "node src/sim/cli.ts",
+    "replay": "node src/replay/cli.ts"
   },
   "dependencies": {
     "fastify": "5.12.8",

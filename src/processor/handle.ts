@@ -133,7 +133,8 @@ async function applyEvent(deps: Deps, event: ShipmentEvent, msg: RawMessage): Pr
          kafka_partition, kafka_offset, detail, trace_id, attempts, downstream_ms, kafka_ts)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, to_timestamp($15::double precision / 1000))`,
       [event.shipmentId, event.eventId, event.seq, event.type, decision.from, decision.to, outcome, event.occurredAt, msg.partition, msg.offset,
-       decision.kind === "apply" ? { location: event.location ?? null, eta: eta ?? null } : { reason: decision.reason, location: event.location ?? null },
+       { ...(decision.kind === "apply" ? { location: event.location ?? null, eta: eta ?? null } : { reason: decision.reason, location: event.location ?? null }),
+         ...(msg.headers["x-replay-id"] ? { replayId: msg.headers["x-replay-id"] } : {}) },
        event.traceId ?? null, attempts.length, downstreamMs, Number(msg.timestamp)],
     );
     if (!sabotaged("no_dedupe")) await client.query("UPDATE processed_events SET outcome = $2 WHERE event_id = $1", [event.eventId, outcome]);
