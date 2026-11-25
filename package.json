@@ -1,0 +1,35 @@
+{
+  "name": "shipevents",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Shipment event processor: Kafka consumer with schema validation, dedupe, ordering tolerance, a state machine, bounded retries, a DLQ and safe replay.",
+  "license": "MIT",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.build.json",
+    "test": "vitest run",
+    "test:unit": "vitest run test/unit",
+    "test:integration": "vitest run test/integration",
+    "processor": "node src/processor/main.ts",
+    "api": "node src/api/main.ts",
+    "sim": "node src/sim/cli.ts"
+  },
+  "dependencies": {
+    "fastify": "5.12.8",
+    "kafkajs": "2.2.4",
+    "pg": "8.23.1",
+    "pino": "9.14.0",
+    "prom-client": "15.1.3",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "24.19.2",
+    "@types/pg": "8.23.1",
+    "typescript": "5.9.3",
+    "vitest": "3.2.7"
+  }
+}
