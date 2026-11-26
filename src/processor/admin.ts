@@ -2,6 +2,8 @@ import { timingSafeEqual } from "node:crypto";
 import Fastify, { type FastifyInstance } from "fastify";
 import type { Producer } from "kafkajs";
 import type { Pool } from "../db/pool.ts";
+import { registry } from "../obs/metrics.ts";
+import type { PartitionLag } from "../obs/lag.ts";
 import { discardEntries, executeReplay, planReplay, recordDryRun, ReplayRefused, type ReplayFilter } from "../replay/replay.ts";
 
 export interface AdminDeps {
@@ -9,6 +11,8 @@ export interface AdminDeps {
   producer: Producer;
   eventsTopic: string;
   adminToken: string;
+  downstreamUrl: string;
+  lag: () => { at: string | null; partitions: PartitionLag[] };
 }
 
 function tokenOk(header: string | undefined, expected: string): boolean {
@@ -31,6 +35,14 @@ export function buildAdmin(deps: AdminDeps): FastifyInstance {
   });
 
   app.get("/healthz", async () => ({ ok: true }));
+  app.get("/metrics", async (_req, reply) => reply.header("content-type", registry.contentType).send(await registry.metrics()));
+  app.get("/admin/lag", async () => deps.lag());
+
+  // Fault switches live on the fake dependency; proxied here so the ops page talks to one origin.
+  app.get("/admin/faults", async () => (await fetch(`${deps.downstreamUrl}/faults`)).json());
+  app.put<{ Body: Record<string, unknown> }>("/admin/faults", async (req) =>
+    (await fetch(`${deps.downstreamUrl}/faults`, { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify(req.body ?? {}) })).json());
+  app.post("/admin/faults/reset", async () => (await fetch(`${deps.downstreamUrl}/faults/reset`, { method: "POST" })).json());
 
   app.get<{ Querystring: { status?: string; shipmentId?: string } }>("/admin/dlq", async (req) => {
     const r = await deps.pool.query(

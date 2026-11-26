@@ -7,6 +7,7 @@ import { sabotaged } from "../lab/sabotage.ts";
 import { sendToDlq, type DlqSink } from "./dlq.ts";
 import { fetchEta, type EtaResponse } from "./etaClient.ts";
 import { withRetry, type AttemptRecord, type RetryPolicy } from "./retry.ts";
+import { downstreamDuration, downstreamRequests, failuresTotal, retriesTotal } from "../obs/metrics.ts";
 
 export interface RawMessage {
   topic: string;
@@ -42,6 +43,7 @@ export async function handleMessage(deps: Deps, msg: RawMessage): Promise<Outcom
       eventId: decoded.eventId,
       source: sourceOf(msg),
     });
+    failuresTotal.inc({ reason: decoded.reason });
     deps.log.warn({ reason: decoded.reason, issues: decoded.issues, partition: msg.partition, offset: msg.offset, dlq: where }, "dead-lettered");
     return "dlq";
   }
@@ -88,7 +90,12 @@ async function applyEvent(deps: Deps, event: ShipmentEvent, msg: RawMessage): Pr
   let attempts: AttemptRecord[] = [];
   if (preview.kind === "apply" && !NO_ETA.includes(preview.to)) {
     const r = await withRetry(deps.retry, (signal) => fetchEta(deps.downstreamUrl, { shipmentId: event.shipmentId, status: preview.to, location: event.location, traceId: event.traceId }, signal),
-      (a) => deps.log.info({ ...ctx, attempt: a }, a.ok ? "eta ok" : "eta attempt failed"));
+      (a) => {
+        downstreamRequests.inc({ result: a.ok ? "ok" : "error" });
+        downstreamDuration.observe(a.ms / 1000);
+        if (a.backoffMs !== undefined) retriesTotal.inc();
+        deps.log.info({ ...ctx, attempt: a }, a.ok ? "eta ok" : "eta attempt failed");
+      });
     attempts = r.attempts;
     if (!r.ok) {
       // Temporary failure that outlived the retry budget, or a permanent 4xx: park it, move the partition on.
@@ -97,6 +104,7 @@ async function applyEvent(deps: Deps, event: ShipmentEvent, msg: RawMessage): Pr
         reason, detail: { attempts: r.attempts, lastError: r.lastError, wouldApply: { from: preview.from, to: preview.to } },
         shipmentId: event.shipmentId, eventId: event.eventId, seq: event.seq, source: sourceOf(msg),
       });
+      failuresTotal.inc({ reason });
       deps.log.warn({ ...ctx, reason, attempts: r.attempts.length, lastError: r.lastError }, "dead-lettered");
       return "dlq";
     }

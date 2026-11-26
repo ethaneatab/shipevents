@@ -5,6 +5,7 @@ import type { Logger } from "../log.ts";
 import { handleMessage, type Deps, type Outcome, type RawMessage } from "./handle.ts";
 import { crashPoint, sabotaged } from "../lab/sabotage.ts";
 import type { RetryPolicy } from "./retry.ts";
+import { eventsTotal, failuresTotal, handleDuration, processingLag } from "../obs/metrics.ts";
 
 export interface ProcessorOptions {
   brokers: string[];
@@ -48,8 +49,12 @@ export async function startProcessor(base: { pool: Pool; log: Logger }, opts: Pr
         key: message.key ? message.key.toString() : null, value: message.value, headers: headersToStrings(message.headers),
       };
       const commit = () => consumer.commitOffsets([{ topic, partition, offset: (BigInt(message.offset) + 1n).toString() }]);
-      if (sabotaged("commit_before_write")) await commitThenProcessLegacy(deps, raw, commit);
-      else await processThenCommit(deps, raw, commit);
+      const started = performance.now();
+      const outcome = sabotaged("commit_before_write") ? await commitThenProcessLegacy(deps, raw, commit) : await processThenCommit(deps, raw, commit);
+      eventsTotal.inc({ outcome });
+      handleDuration.observe({ outcome }, (performance.now() - started) / 1000);
+      if (outcome === "applied" || outcome === "stale") processingLag.observe(Math.max(0, Date.now() - Number(message.timestamp)) / 1000);
+      if (outcome === "rejected") failuresTotal.inc({ reason: "illegal_transition" });
     },
   });
   return {

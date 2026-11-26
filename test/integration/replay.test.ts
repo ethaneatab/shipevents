@@ -127,7 +127,7 @@ describe("safe replay", () => {
 
 describe("operator API auth", () => {
   it("admin endpoints need the bearer token", async () => {
-    const app = buildAdmin({ pool: h.pool, producer: h.producer, eventsTopic: h.names.topic, adminToken: "test-token-123" });
+    const app = buildAdmin({ pool: h.pool, producer: h.producer, eventsTopic: h.names.topic, adminToken: "test-token-123", downstreamUrl: h.downstream.url, lag: () => ({ at: null, partitions: [] }) });
     expect((await app.inject({ method: "GET", url: "/admin/dlq" })).statusCode).toBe(401);
     expect((await app.inject({ method: "GET", url: "/admin/dlq", headers: { authorization: "Bearer wrong-token-xx" } })).statusCode).toBe(401);
     expect((await app.inject({ method: "GET", url: "/admin/dlq", headers: { authorization: "Bearer test-token-123" } })).statusCode).toBe(200);
