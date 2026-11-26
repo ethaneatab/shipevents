@@ -50,22 +50,19 @@ echo $! >"$RT/frontend.pid"
 # @learn:end frontend-start
 wait_http http://127.0.0.1:5190/ 60
 
-echo "== seed (idempotent)"
-seeded=0
-if ! curl -sf http://127.0.0.1:8901/v1/shipments/SHP-DEMO0001 >/dev/null; then
-  seeded=1
-  node src/sim/cli.ts journey --shipment SHP-DEMO0001 >/dev/null
-  node src/sim/cli.ts out-of-order --shipment SHP-DEMO0002 >/dev/null
-  node src/sim/cli.ts illegal --shipment SHP-DEMO0003 >/dev/null
-  node src/sim/cli.ts malformed --shipment SHP-DEMO0004 >/dev/null
-fi
-s=DELIVERED
-[ $seeded = 1 ] && for i in $(seq 1 30); do
-  s=$(curl -sf http://127.0.0.1:8901/v1/shipments/SHP-DEMO0001 | node -e 'let d="";process.stdin.on("data",c=>d+=c).on("end",()=>{try{console.log(JSON.parse(d).shipment.status)}catch{console.log("")}})' || true)
-  [ "$s" = DELIVERED ] && break
+echo "== seed (idempotent: each demo shipment is only sent if it is not there yet)"
+TOKEN=${ADMIN_TOKEN:-dev-admin-token-change-me}
+has() { curl -sf "http://127.0.0.1:8901/v1/shipments/$1" >/dev/null; }
+has_dlq() { curl -sf -H "authorization: Bearer $TOKEN" "http://127.0.0.1:8900/admin/dlq?shipmentId=$1" | grep -q '"id"'; }
+has SHP-DEMO0001 || node src/sim/cli.ts journey --shipment SHP-DEMO0001 >/dev/null
+has SHP-DEMO0002 || node src/sim/cli.ts out-of-order --shipment SHP-DEMO0002 >/dev/null
+has SHP-DEMO0003 || node src/sim/cli.ts illegal --shipment SHP-DEMO0003 >/dev/null
+has_dlq SHP-DEMO0004 || node src/sim/cli.ts malformed --shipment SHP-DEMO0004 >/dev/null
+for i in $(seq 1 30); do
+  has SHP-DEMO0002 && has SHP-DEMO0003 && has_dlq SHP-DEMO0004 && break
   sleep 1
 done
-[ "$s" = DELIVERED ] || { echo "seed did not reach DELIVERED"; exit 1; }
+has SHP-DEMO0002 && has_dlq SHP-DEMO0004 || { echo "seed did not land"; exit 1; }
 
 cat <<MSG
 == up

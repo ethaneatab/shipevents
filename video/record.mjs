@@ -58,13 +58,21 @@ async function box(highlight, shape = "box") {
     if (!el) return null;
     el.scrollIntoView({ block: "center", inline: "nearest" });
     let rect = el.getBoundingClientRect();
+    if (!text && el.children.length === 0 && el.textContent.trim()) {
+      // a block that only holds text: box the text itself, not the full-width block
+      const r = document.createRange();
+      r.selectNodeContents(el);
+      const rr = r.getBoundingClientRect();
+      if (rr.width > 0) rect = rr;
+    }
     if (text) {
       const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
       let node;
       while ((node = walker.nextNode())) {
         const i = node.textContent.indexOf(text);
         if (i >= 0) {
-          const line = node.textContent.slice(i).split("\n")[0];
+          // box just the matched phrase, up to the end of its line or the next "→" separator
+          const line = node.textContent.slice(i).split("\n")[0].split(" →")[0];
           const r = document.createRange();
           r.setStart(node, i);
           r.setEnd(node, i + line.length);
@@ -113,23 +121,34 @@ async function clickBoxed(seg, ms = 1200) {
   return b;
 }
 
+/** Click something that starts a new learn run, and wait until the page is following the *new* message. */
+async function clickNewRun(seg) {
+  const before = await page.locator("[data-testid=current-sample]").innerText().catch(() => "");
+  const b = await clickBoxed(seg);
+  await page.waitForFunction((prev) => {
+    const el = document.querySelector("[data-testid=current-sample]");
+    return el && el.textContent !== prev;
+  }, before, { timeout: 20_000 });
+  return b;
+}
+
 const actions = {
   async goto_learn(seg) { await page.goto(`${BASE}/learn`); await page.waitForSelector("[data-testid=submit-sample]"); return box(seg.highlight, seg.shape); },
   async none(seg) { return box(seg.highlight, seg.shape); },
   async click(seg) { const b = await clickBoxed(seg); await sleep(700); return (await box(seg.highlight, seg.shape)) ?? b; },
   async click_submit(seg) {
-    const b = await clickBoxed(seg);
+    const b = await clickNewRun(seg);
     await status("api", "done");
     return b;
   },
   async click_branch(seg) {
-    const b = await clickBoxed(seg);
+    const b = await clickNewRun(seg);
     const [stage, value] = BRANCH_DONE[seg.arg];
     await status(stage, value);
     return b;
   },
   async click_replay(seg) {
-    const b = await clickBoxed(seg);
+    const b = await clickNewRun(seg);
     await page.waitForSelector("[data-testid=replay-result]", { timeout: 20_000 });
     await status("write", "done");
     await page.locator("[data-testid=replay-result]").scrollIntoViewIfNeeded();
@@ -142,7 +161,9 @@ const actions = {
     return b;
   },
   async goto_track(seg) { await page.goto(`${BASE}/track?id=SHP-DEMO0002`); await page.waitForSelector("[data-testid=track-status]"); return box(seg.highlight, seg.shape); },
-  async goto_interview(seg) { const b = await clickBoxed(seg); await page.waitForSelector("[data-testid=interview]"); return b; },
+  async goto_interview(seg) {
+    if (!(await page.locator(seg.highlight).count())) { await page.goto(`${BASE}/learn`); await page.waitForSelector(seg.highlight); }
+    const b = await clickBoxed(seg); await page.waitForSelector("[data-testid=interview]"); return b; },
   async goto_problems(seg) { const b = await clickBoxed(seg); await page.waitForSelector("[data-testid=problems]"); return b; },
   async open_question(seg) {
     const sum = page.locator("[data-testid=interview] details.q summary").first();
