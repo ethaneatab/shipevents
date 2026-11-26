@@ -5,12 +5,14 @@ import type { Pool } from "../db/pool.ts";
 export function buildApi(pool: Pool): FastifyInstance {
   const app = Fastify({ logger: false });
   app.get("/healthz", async () => ({ ok: true }));
+  // @learn:api-shipment
   app.get<{ Params: { id: string } }>("/v1/shipments/:id", async (req, reply) => {
     const s = await pool.query("SELECT * FROM shipments WHERE shipment_id = $1", [req.params.id]);
     if (s.rowCount === 0) return reply.code(404).send({ error: "not_found" });
     const h = await pool.query("SELECT * FROM shipment_history WHERE shipment_id = $1 ORDER BY seq, id", [req.params.id]);
     return { shipment: s.rows[0], history: h.rows };
   });
+  // @learn:end api-shipment
 
   // @learn:latency-breakdown
   // "My update showed up late": for each event, where did the time go? Queue wait vs. downstream vs. the rest.

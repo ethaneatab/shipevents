@@ -1,0 +1,132 @@
+{
+  "api-shipment": {
+    "path": "src/api/server.ts",
+    "start": 9,
+    "end": 14
+  },
+  "backoff": {
+    "path": "src/processor/retry.ts",
+    "start": 43,
+    "end": 47
+  },
+  "commit-legacy": {
+    "path": "src/processor/consumer.ts",
+    "start": 83,
+    "end": 88
+  },
+  "commit-order": {
+    "path": "src/processor/consumer.ts",
+    "start": 73,
+    "end": 79
+  },
+  "consumer-lag": {
+    "path": "src/obs/lag.ts",
+    "start": 11,
+    "end": 24
+  },
+  "crash-point": {
+    "path": "src/lab/sabotage.ts",
+    "start": 15,
+    "end": 21
+  },
+  "dedupe-claim": {
+    "path": "src/processor/handle.ts",
+    "start": 62,
+    "end": 70
+  },
+  "dlq-send": {
+    "path": "src/processor/dlq.ts",
+    "start": 19,
+    "end": 42
+  },
+  "downstream-call": {
+    "path": "src/processor/handle.ts",
+    "start": 104,
+    "end": 133
+  },
+  "frontend-start": {
+    "path": "scripts/demo.sh",
+    "start": 47,
+    "end": 49
+  },
+  "latency-breakdown": {
+    "path": "src/api/server.ts",
+    "start": 18,
+    "end": 34
+  },
+  "produce-key": {
+    "path": "src/sim/produce.ts",
+    "start": 16,
+    "end": 17
+  },
+  "q01-random-kill-before": {
+    "path": "docs/problems/snippets/q01-random-kill.ts",
+    "start": 5,
+    "end": 12
+  },
+  "q02-create-topics-before": {
+    "path": "docs/problems/snippets/q02-create-topics.ts",
+    "start": 3,
+    "end": 10
+  },
+  "q03-assert-before": {
+    "path": "docs/problems/snippets/q03-wrong-assertion.ts",
+    "start": 3,
+    "end": 7
+  },
+  "q04-frontend-start-before": {
+    "path": "docs/problems/snippets/q04-demo-start.sh",
+    "start": 3,
+    "end": 5
+  },
+  "q07-no-dedupe-before": {
+    "path": "docs/problems/snippets/q07-no-dedupe.ts",
+    "start": 3,
+    "end": 8
+  },
+  "q08-parse-before": {
+    "path": "docs/problems/snippets/q08-parse.ts",
+    "start": 3,
+    "end": 8
+  },
+  "replay-execute": {
+    "path": "src/replay/replay.ts",
+    "start": 126,
+    "end": 172
+  },
+  "replay-plan": {
+    "path": "src/replay/replay.ts",
+    "start": 45,
+    "end": 92
+  },
+  "retry-loop": {
+    "path": "src/processor/retry.ts",
+    "start": 53,
+    "end": 81
+  },
+  "schema-decode": {
+    "path": "src/events/schema.ts",
+    "start": 28,
+    "end": 58
+  },
+  "state-decide": {
+    "path": "src/domain/stateMachine.ts",
+    "start": 32,
+    "end": 51
+  },
+  "state-legacy": {
+    "path": "src/domain/stateMachine.ts",
+    "start": 55,
+    "end": 58
+  },
+  "topic-ready": {
+    "path": "src/kafka/client.ts",
+    "start": 23,
+    "end": 34
+  },
+  "write-record": {
+    "path": "src/processor/handle.ts",
+    "start": 150,
+    "end": 179
+  }
+}

@@ -43,6 +43,8 @@ export async function startProcessor(base: { pool: Pool; log: Logger }, opts: Pr
   await consumer.subscribe({ topic: opts.topic, fromBeginning: true });
   await consumer.run({
     autoCommit: false,
+    // Partitions are independent orderings, so they can be handled in parallel; within one partition it stays sequential.
+    partitionsConsumedConcurrently: Number(process.env.PARTITION_CONCURRENCY ?? 3),
     eachMessage: async ({ topic, message, partition }) => {
       const raw: RawMessage = {
         topic, partition, offset: message.offset, timestamp: message.timestamp,

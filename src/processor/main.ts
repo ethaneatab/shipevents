@@ -33,7 +33,7 @@ const poll = setInterval(async () => {
   }
 }, 2000);
 
-const admin = buildAdmin({ pool, producer: proc.producer, eventsTopic: config.eventsTopic, adminToken: config.adminToken, downstreamUrl: config.downstreamUrl, lag: () => lagSnapshot });
+const admin = buildAdmin({ pool, producer: proc.producer, eventsTopic: config.eventsTopic, adminToken: config.adminToken, downstreamUrl: config.downstreamUrl, lag: () => lagSnapshot, learnMode: process.env.LEARN_MODE === "1" });
 const address = await admin.listen({ port: config.processorPort, host: process.env.PROCESSOR_HOST ?? "127.0.0.1" });
 log.info({ port: config.processorPort, address }, "processor listening");
 

@@ -1,0 +1,50 @@
+[
+  { "id": "s01", "part": "p1-intake", "text": "这一段讲一条货运事件是怎么进到系统里的。我们从教学页开始。", "action": "goto_learn", "highlight": "[data-testid=submit-sample]" },
+  { "id": "s02", "part": "p1-intake", "text": "先看这个按钮。点下去，后端会往卡夫卡真的发一条揽收事件。", "action": "click_submit", "highlight": "[data-testid=submit-sample]" },
+  { "id": "s03", "part": "p1-intake", "text": "看第一步。这条消息落在哪个分区、哪个位点，是生产者拿到的真实回执。", "action": "none", "highlight": "[data-testid=summary-produce]" },
+  { "id": "s04", "part": "p1-intake", "text": "为什么要看分区？因为消息的键是运单号，同一个运单永远在同一个分区，顺序才有保证。", "action": "click", "highlight": "[data-testid=expand-produce]" },
+  { "id": "s05", "part": "p1-intake", "text": "展开以后，这里就是键。它和运单号一模一样。这一段就到这里。", "action": "none", "highlight": "[data-testid=data-produce]|\"key\": \"LRN" },
+
+  { "id": "s06", "part": "p2-schema", "text": "这一段讲校验。消息进来，第一件事是验货。", "action": "none", "highlight": "[data-testid=stage-schema] h3" },
+  { "id": "s07", "part": "p2-schema", "text": "看这一行。版本一，揽收，序号二，说明字段和版本都合格。", "action": "none", "highlight": "[data-testid=summary-schema]" },
+  { "id": "s08", "part": "p2-schema", "text": "代码在哪？点看源码。链接钉在当前这个提交上，不会指向会变的主分支。", "action": "show_link", "highlight": "[data-testid=src-schema]" },
+  { "id": "s09", "part": "p2-schema", "text": "如果字段是坏的会怎样？点发畸形事件试一下。", "action": "click_branch", "arg": "malformed", "highlight": "[data-testid=branch-malformed]" },
+  { "id": "s10", "part": "p2-schema", "text": "校验这一步变红了，原因写得很清楚，序号应该是数字，收到的是字符串。", "action": "none", "highlight": "[data-testid=summary-schema]" },
+  { "id": "s11", "part": "p2-schema", "text": "它没有卡住分区，而是带着原因进了死信队列。这一段讲完了。", "action": "none", "highlight": "[data-testid=summary-dlq]" },
+
+  { "id": "s12", "part": "p3-dedupe", "text": "这一段讲去重。我们重新提交一次样例。", "action": "click_submit", "highlight": "[data-testid=submit-sample]" },
+  { "id": "s13", "part": "p3-dedupe", "text": "看去重这一步。新的事件编号，可以继续。", "action": "none", "highlight": "[data-testid=summary-dedupe]" },
+  { "id": "s14", "part": "p3-dedupe", "text": "现在把同一条事件再发一次，模拟上游重发。", "action": "click_branch", "arg": "duplicate", "highlight": "[data-testid=branch-duplicate]" },
+  { "id": "s15", "part": "p3-dedupe", "text": "这里显示已经处理过。后面几步都没走，连下游都没调。", "action": "none", "highlight": "[data-testid=summary-dedupe]" },
+  { "id": "s16", "part": "p3-dedupe", "text": "为什么可靠？去重记录和状态更新在同一个事务里，而且先写库，再提交位点。这一段到这里。", "action": "none", "highlight": "[data-testid=src-write]" },
+
+  { "id": "s17", "part": "p4-state", "text": "这一段讲状态机。先回到正常的样例。", "action": "click_submit", "highlight": "[data-testid=submit-sample]" },
+  { "id": "s18", "part": "p4-state", "text": "看这一行，从已建单到已揽收，是一次合法的前进。", "action": "none", "highlight": "[data-testid=summary-state]" },
+  { "id": "s19", "part": "p4-state", "text": "再发一条迟到的旧事件，它的序号是一。", "action": "click_branch", "arg": "stale", "highlight": "[data-testid=branch-stale]" },
+  { "id": "s20", "part": "p4-state", "text": "判定是过期。序号一不大于已经应用的二，所以只进历史。", "action": "none", "highlight": "[data-testid=summary-state]" },
+  { "id": "s21", "part": "p4-state", "text": "客户那边看到的状态还是已揽收，没有倒退。这一段讲完。", "action": "none", "highlight": "[data-testid=summary-api]" },
+
+  { "id": "s22", "part": "p5-retry", "text": "这一段讲下游失败。重新提交样例，这次下游会故意失败一次。", "action": "click_submit", "highlight": "[data-testid=submit-sample]" },
+  { "id": "s23", "part": "p5-retry", "text": "看这里，第一次尝试返回五零三，系统等了一百多毫秒再试。", "action": "none", "highlight": "[data-testid=summary-downstream]|attempt 1 failed" },
+  { "id": "s24", "part": "p5-retry", "text": "第二次就成功了。说明临时故障，靠退避重试就能扛过去。", "action": "none", "highlight": "[data-testid=summary-downstream]|attempt 2 ok" },
+  { "id": "s25", "part": "p5-retry", "text": "展开写库这一步，看历史表里那一行。尝试次数是二。重试有上限，最多四次。", "action": "click", "highlight": "[data-testid=expand-write]" },
+  { "id": "s26", "part": "p5-retry", "text": "这一行就是记下来的尝试次数。这一段到这里。", "action": "none", "highlight": "[data-testid=data-write]|\"attempts\": 2" },
+
+  { "id": "s27", "part": "p6-replay", "text": "这一段讲死信和重放。点下游宕机，下游会连续失败四次。", "action": "click_branch", "arg": "outage", "highlight": "[data-testid=branch-outage]" },
+  { "id": "s28", "part": "p6-replay", "text": "四次都失败，预算用完，这条事件进了死信队列。分区继续往前走。", "action": "none", "highlight": "[data-testid=summary-dlq]" },
+  { "id": "s29", "part": "p6-replay", "text": "下游恢复以后，先做演练。点这里。", "action": "click", "highlight": "[data-testid=dry-run]" },
+  { "id": "s30", "part": "p6-replay", "text": "演练结论：这条会被应用，从已揽收到运输中。演练本身一条都不写。", "action": "none", "highlight": "[data-testid=plan-table] tr[data-verdict=apply]" },
+  { "id": "s31", "part": "p6-replay", "text": "确认没问题，再执行重放。", "action": "click_replay", "highlight": "[data-testid=execute-replay]" },
+  { "id": "s32", "part": "p6-replay", "text": "发回了一条。重放的事件走正常的消费路径，所以照样去重、照样过状态机。这一段讲完。", "action": "none", "highlight": "[data-testid=replay-result]" },
+
+  { "id": "s33", "part": "p7-observe", "text": "这一段讲客户看到什么。看最后一步，客户接口读到的状态已经是运输中。", "action": "none", "highlight": "[data-testid=summary-api]" },
+  { "id": "s34", "part": "p7-observe", "text": "换到客户追踪页，看一个乱序到达的运单。", "action": "goto_track", "highlight": "[data-testid=track-status]" },
+  { "id": "s35", "part": "p7-observe", "text": "时间线里两条灰色的过期，就是迟到的扫描。状态停在派送中，没有倒退。", "action": "none", "highlight": "[data-testid=track-history] .p-stale" },
+  { "id": "s36", "part": "p7-observe", "text": "下面是延迟拆解。客户说更新晚了，先看时间花在下游，还是花在排队。这一段到这里。", "action": "none", "highlight": "[data-testid=latency-table] thead" },
+
+  { "id": "s37", "part": "p8-learn", "text": "最后一段，看面试题和日常问题。先切到面试题。", "action": "goto_interview", "highlight": "[data-testid=tab-interview]" },
+  { "id": "s38", "part": "p8-learn", "text": "点开一题，先给一句话答案，再展开，再是追问。", "action": "open_question", "highlight": "[data-testid=interview] details.q[open] summary" },
+  { "id": "s39", "part": "p8-learn", "text": "再看日常问题。每一题都有现象、定位、修复和证明。", "action": "goto_problems", "highlight": "[data-testid=tab-problems]" },
+  { "id": "s40", "part": "p8-learn", "text": "点开第一题，随机杀进程的测试为什么抓不到问题。", "action": "open_problem", "highlight": "[data-testid=problems] details.problem[open] summary" },
+  { "id": "s41", "part": "p8-learn", "text": "总结一下：键保顺序，校验挡坏消息，去重加先写库保不丢不重，状态机保不倒退，重试有上限，重放有演练和审计。谢谢观看。", "action": "none", "highlight": "[data-testid=problems] details.problem[open] .answer h2, [data-testid=problems] details.problem[open] .answer p" }
+]

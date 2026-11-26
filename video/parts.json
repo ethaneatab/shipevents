@@ -1,0 +1,10 @@
+[
+  { "part": "p1-intake", "title": "事件怎么进来：按运单做 key", "stage": "produce", "chapter": "docs/tutorial/01-minimal-consumer.md" },
+  { "part": "p2-schema", "title": "先验货：schema 校验", "stage": "schema", "chapter": "docs/tutorial/02-schema-and-dlq.md" },
+  { "part": "p3-dedupe", "title": "去重和先写库后提交", "stage": "dedupe", "chapter": "docs/tutorial/03-dedupe-and-commit-order.md" },
+  { "part": "p4-state", "title": "状态机：旧事件不回退", "stage": "state", "chapter": "docs/tutorial/04-state-machine-and-ordering.md" },
+  { "part": "p5-retry", "title": "下游失败：有界重试", "stage": "downstream", "chapter": "docs/tutorial/05-bounded-retries.md" },
+  { "part": "p6-replay", "title": "死信和安全重放", "stage": "dlq", "chapter": "docs/tutorial/06-safe-replay.md" },
+  { "part": "p7-observe", "title": "客户看到什么，晚在哪里", "stage": "api", "chapter": "docs/tutorial/07-observability.md" },
+  { "part": "p8-learn", "title": "教学页、面试题和日常问题", "stage": "all", "chapter": "docs/tutorial/08-learn-page-and-e2e.md" }
+]

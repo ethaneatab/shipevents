@@ -18,7 +18,10 @@
     "api": "node src/api/main.ts",
     "downstream": "node src/downstream/main.ts",
     "sim": "node src/sim/cli.ts",
-    "replay": "node src/replay/cli.ts"
+    "replay": "node src/replay/cli.ts",
+    "e2e": "playwright test -c e2e/playwright.config.ts",
+    "anchors": "node scripts/learn_anchors.mjs",
+    "check:anchors": "node scripts/check_anchors.mjs"
   },
   "dependencies": {
     "fastify": "5.12.8",
@@ -29,6 +32,7 @@
     "zod": "4.6.7"
   },
   "devDependencies": {
+    "@playwright/test": "1.65.1",
     "@types/node": "24.19.2",
     "@types/pg": "8.23.1",
     "typescript": "5.9.3",

@@ -1,0 +1,169 @@
+[
+  {
+    "id": "q01-random-kill-misses",
+    "title": "随机杀进程的测试，抓不到丢和重",
+    "subtitle": "关掉去重以后，重启测试居然还是绿的",
+    "lang": "typescript",
+    "code_from": { "path": "src/lab/sabotage.ts", "anchor": "crash-point" },
+    "before_from": { "path": "docs/problems/snippets/q01-random-kill.ts", "anchor": "q01-random-kill-before" },
+    "before_segments": [
+      { "lines": [], "text": "先说现象。我故意把去重关掉，跑重启测试，按理说应该变红，结果它是绿的。" },
+      { "lines": [3, 4], "text": "看这两行。处理到大约三分之一，随手杀掉进程。杀在哪一刻，完全看运气。" },
+      { "lines": [8], "text": "最后断言没有重复。问题是，会出重复的窗口只有写完库、还没提交那几毫秒，随机杀几乎打不中。" }
+    ],
+    "segments": [
+      { "lines": [], "text": "所以我的判断是，测试不是在证明没问题，而是根本没测到那个缝。" },
+      { "lines": [1, 2], "text": "修法是加一个确定性的崩溃点。环境变量里写上要崩的那条事件的编号。" },
+      { "lines": [3], "text": "处理到这条事件，并且刚做完第一步，就进入这里。" },
+      { "lines": [5], "text": "进程给自己发杀死信号，正好死在写库和提交之间。" },
+      { "lines": [], "text": "再关掉去重跑一次，这个用例马上变红，第四条事件在历史里出现了两次。打开去重，又变绿。" },
+      { "lines": [], "text": "面试可以这样说：绿灯有两种原因，一种是真没问题，一种是没测到。我用确定性的崩溃点，先证明测试会红，再相信它的绿。" }
+    ]
+  },
+  {
+    "id": "q02-topic-not-ready",
+    "title": "刚建好的主题，第一条消息就发不出去",
+    "subtitle": "偶发报错，这台服务器不托管这个分区",
+    "lang": "typescript",
+    "code_from": { "path": "src/kafka/client.ts", "anchor": "topic-ready" },
+    "before_from": { "path": "docs/problems/snippets/q02-create-topics.ts", "anchor": "q02-create-topics-before" },
+    "before_segments": [
+      { "lines": [], "text": "现象是，整套测试跑了很多次，只有一次出现一个跳过的用例，旁边是一条卡夫卡协议错误。" },
+      { "lines": [2, 3], "text": "原来的写法，建主题时让它等领导者选出来，就直接认为可以发消息了。" },
+      { "lines": [8], "text": "但报错说，这台服务器不托管这个分区。说明建主题返回的那一刻，分区还没真正能用。" }
+    ],
+    "segments": [
+      { "lines": [], "text": "这个问题我只复现到一次，所以修法要做成不依赖运气的等待。" },
+      { "lines": [5, 6], "text": "建完以后，设一个十五秒的截止时间，循环检查。" },
+      { "lines": [7, 8], "text": "每次拉一遍元数据，要求分区数对得上，而且每个分区都有领导者。" },
+      { "lines": [9], "text": "满足了才往下走，超时也往下走，让后面的重试去兜底。" },
+      { "lines": [], "text": "老实说，偶发问题没法用一个必红的测试证明修好了。我的证据是之后连续三轮全套测试都没再出现。" },
+      { "lines": [], "text": "面试一句话：创建成功不等于可用，异步系统里要等到你真正依赖的那个条件成立。" }
+    ]
+  },
+  {
+    "id": "q03-queue-not-downstream",
+    "title": "我以为慢在下游，其实是在排队",
+    "subtitle": "延迟拆解的测试第一次就红了，错的是我的假设",
+    "lang": "typescript",
+    "code_from": { "path": "src/api/server.ts", "anchor": "latency-breakdown" },
+    "before_from": { "path": "docs/problems/snippets/q03-wrong-assertion.ts", "anchor": "q03-assert-before" },
+    "before_segments": [
+      { "lines": [], "text": "背景是，下游被我调成每次慢二百五十毫秒，同一个运单连发四条。" },
+      { "lines": [2, 4], "text": "我断言最后一条的主因是下游。测试红了，实际结果是排队或者写库。" }
+    ],
+    "segments": [
+      { "lines": [], "text": "先别改代码。先问一句，是代码错了，还是我想错了。" },
+      { "lines": [5], "text": "端到端时间，是从卡夫卡收下消息，到这一行写进数据库。" },
+      { "lines": [13], "text": "端到端减去下游时间，剩下的就是排队加写库。" },
+      { "lines": [14], "text": "下游占一半以上才算慢在下游。最后一条自己只花了二百五十毫秒，却在前面三条后面排了七百多毫秒。" },
+      { "lines": [], "text": "所以数据是对的，同一个分区里，前面的慢事件会拖慢后面所有事件。" },
+      { "lines": [], "text": "测试改成：第一条慢在下游，最后一条慢在排队，而且排队超过五百毫秒。现在它守着这个结论。" },
+      { "lines": [], "text": "面试一句话：用户说更新晚了，先拆开看时间花在哪，别只盯着那一条事件自己的日志。" }
+    ]
+  },
+  {
+    "id": "q04-demo-hangs",
+    "title": "启动脚本跑完了，终端却一直不返回",
+    "subtitle": "进程号记错了，后台子进程还占着输出管道",
+    "lang": "bash",
+    "code_from": { "path": "scripts/demo.sh", "anchor": "frontend-start" },
+    "before_from": { "path": "docs/problems/snippets/q04-demo-start.sh", "anchor": "q04-frontend-start-before" },
+    "before_segments": [
+      { "lines": [], "text": "现象是，启动脚本三分钟都没结束，可所有服务其实早就起来了。" },
+      { "lines": [1], "text": "看这一行。切目录和启动前端被包在一个子壳里一起放到后台。" },
+      { "lines": [2], "text": "所以记下来的进程号，是那个子壳，不是前端服务本身。停止脚本按进程号杀，会杀错对象。" },
+      { "lines": [3], "text": "更隐蔽的是，子壳自己继承了脚本的标准输出，管道一直没人关，外面接的命令就一直等。" }
+    ],
+    "segments": [
+      { "lines": [], "text": "我怎么定位的：先看日志确认服务都好了，再列出那个进程号的子进程，发现它下面才是前端。" },
+      { "lines": [2], "text": "修法有两点。第一，用执行替换，让子壳直接变成前端进程，记下的号就是它。" },
+      { "lines": [2], "text": "第二，把整个子壳的输出重定向到日志文件，它就不再占着外面的管道。" },
+      { "lines": [3], "text": "进程号写进运行目录，停止脚本只按这个号杀，杀之前还核对一下命令行。" },
+      { "lines": [], "text": "证明修好了：从空数据卷跑启动脚本，正常退出，停止脚本按号停掉四个进程。" },
+      { "lines": [], "text": "面试一句话：只杀自己起的进程，就要保证记下的那个号，确实是你以为的那个进程。" }
+    ]
+  },
+  {
+    "id": "q05-status-goes-back",
+    "title": "已签收的包裹，又变回运输中",
+    "subtitle": "迟到的旧事件覆盖了新状态",
+    "lang": "typescript",
+    "code_from": { "path": "src/domain/stateMachine.ts", "anchor": "state-decide" },
+    "before_from": { "path": "src/domain/stateMachine.ts", "anchor": "state-legacy" },
+    "before_segments": [
+      { "lines": [], "text": "这是这类系统在生产上最典型的事故。第一章的版本真跑出来过：签收以后补到一条到站扫描，状态退回了运输中。" },
+      { "lines": [3], "text": "旧逻辑只有这一行，谁最后到，谁说了算。" }
+    ],
+    "segments": [
+      { "lines": [], "text": "定位的时候先排除去重。迟到的是另一条事件，编号不同，去重挡不住。" },
+      { "lines": [13], "text": "所以要按承运商给的序号判断新旧。序号不大于已应用的，就是旧事件。" },
+      { "lines": [14], "text": "旧事件不丢，写进历史，标成过期，但状态不动。" },
+      { "lines": [16, 17], "text": "序号更新但动作不合法，比如签收以后又扫描，就拒绝，并且送进死信队列等人看。" },
+      { "lines": [19], "text": "两关都过了，才真正应用。" },
+      { "lines": [], "text": "证明：打开破坏开关，乱序测试五个用例红了四个；关掉开关，全绿。" },
+      { "lines": [], "text": "面试一句话：顺序靠业务序号加状态机守，不能指望消息到达的顺序。" }
+    ]
+  },
+  {
+    "id": "q06-lost-on-restart",
+    "title": "重启以后，少了一条事件",
+    "subtitle": "先提交位点再写库，崩在中间就永久丢失",
+    "lang": "typescript",
+    "code_from": { "path": "src/processor/consumer.ts", "anchor": "commit-order" },
+    "before_from": { "path": "src/processor/consumer.ts", "anchor": "commit-legacy" },
+    "before_segments": [
+      { "lines": [], "text": "现象：处理器被杀掉重启，六条事件的历史里，第四条是零次。" },
+      { "lines": [3], "text": "错误的顺序是先告诉卡夫卡处理完了。" },
+      { "lines": [4, 5], "text": "如果进程正好死在这里，卡夫卡不会再投递，数据库里却什么都没有。" }
+    ],
+    "segments": [
+      { "lines": [3], "text": "正确的顺序反过来，先把数据库事务提交。" },
+      { "lines": [4], "text": "崩溃点放在中间，就是用来验证这个缝的。" },
+      { "lines": [5], "text": "最后才提交位点。崩在中间，消息会再来一次，去重把它挡掉。" },
+      { "lines": [], "text": "证明：用先提交的旧路径跑重启测试，结果是一一一零一一，丢了一条。换回来，六个都是一。" },
+      { "lines": [], "text": "面试一句话：至少一次投递加幂等写入，才等于效果上的恰好一次。" }
+    ]
+  },
+  {
+    "id": "q07-duplicate-history",
+    "title": "同一条事件，历史里出现三次",
+    "subtitle": "上游重发，我们照单全收",
+    "lang": "typescript",
+    "code_from": { "path": "src/processor/handle.ts", "anchor": "dedupe-claim" },
+    "before_from": { "path": "docs/problems/snippets/q07-no-dedupe.ts", "anchor": "q07-no-dedupe-before" },
+    "before_segments": [
+      { "lines": [], "text": "现象：同一条揽收事件投递了三次，历史表多了两行，版本号多加了两次。" },
+      { "lines": [3, 4], "text": "旧代码每来一次就写一次，没有任何记录说这条已经处理过。" }
+    ],
+    "segments": [
+      { "lines": [1, 2], "text": "修法是先占位。在同一个事务里，先把事件编号插进去重表。" },
+      { "lines": [5, 6], "text": "主键冲突就什么都不做，也不返回任何行。" },
+      { "lines": [9], "text": "插进去了才继续改状态，插不进去，说明处理过，整个事务回滚。" },
+      { "lines": [], "text": "为什么不放内存或者另一个存储？因为记编号和改状态必须一起成功、一起失败。" },
+      { "lines": [], "text": "证明：关掉去重，重复投递测试报期望一次实际三次；打开就绿。" },
+      { "lines": [], "text": "面试一句话：去重记录和业务写入放在同一个事务里，并发重复也只有一个能占到。" }
+    ]
+  },
+  {
+    "id": "q08-poison-message",
+    "title": "一条坏消息，卡住了整个分区",
+    "subtitle": "解析抛异常，同一个位点无限重试",
+    "lang": "typescript",
+    "code_from": { "path": "src/events/schema.ts", "anchor": "schema-decode" },
+    "before_from": { "path": "docs/problems/snippets/q08-parse.ts", "anchor": "q08-parse-before" },
+    "before_segments": [
+      { "lines": [], "text": "现象：某个分区的积压只涨不降，日志里同一个位点的异常反复出现。" },
+      { "lines": [2], "text": "旧代码直接解析，坏字节在这里抛异常，客户端就一直重试这一条。" }
+    ],
+    "segments": [
+      { "lines": [5], "text": "新的解码函数从不抛异常，要么给出事件，要么给出原因。" },
+      { "lines": [7, 10], "text": "不是合法的格式，原因就是无效格式。" },
+      { "lines": [17, 19], "text": "字段错了，把每个错误连同字段路径都带上。" },
+      { "lines": [23, 24], "text": "还有一个容易漏的：消息的键和运单号不一致，也算坏消息，因为它会悄悄破坏顺序。" },
+      { "lines": [], "text": "坏消息带着原因和原始字节进死信队列，分区继续往前走。" },
+      { "lines": [], "text": "证明：同一个分区依次发好、坏、坏、好，测试断言最后那条好的照样被处理。" },
+      { "lines": [], "text": "面试一句话：毒丸消息要变成一条有原因的死信，而不是一个崩溃循环。" }
+    ]
+  }
+]

@@ -11,6 +11,7 @@ export function sabotaged(name: Sabotage): boolean {
  * Crash hook for restart tests: SIGKILL ourselves right after the first durable step for this event id,
  * i.e. in the gap between "write the database" and "commit the offset" (or the reverse under sabotage).
  */
+// @learn:crash-point
 export function crashPoint(eventId: string | undefined): void {
   const target = process.env.LAB_CRASH_ON_EVENT;
   if (target && eventId === target) {
@@ -18,3 +19,4 @@ export function crashPoint(eventId: string | undefined): void {
     process.kill(process.pid, "SIGKILL");
   }
 }
+// @learn:end crash-point

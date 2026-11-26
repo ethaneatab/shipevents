@@ -1,0 +1,58 @@
+{
+  "when": "2026-11-26T02:18:59.663Z",
+  "environment": "Apple M5 Pro x18, node v24.15.0; Kafka+Postgres in a shared colima VM (4 vCPU, 6 GiB) with other projects running",
+  "params": {
+    "runs": 3,
+    "drainEvents": 3000,
+    "steadyRate": 50,
+    "steadySeconds": 10
+  },
+  "partitionConcurrency1": {
+    "drainEventsPerSec": {
+      "runs": [
+        90,
+        89,
+        87
+      ],
+      "median": 89
+    },
+    "steadyLagMs": {
+      "p50Runs": [
+        63,
+        61,
+        61
+      ],
+      "p99Runs": [
+        390,
+        101,
+        92
+      ],
+      "p50Median": 61,
+      "p99Median": 101
+    }
+  },
+  "partitionConcurrency3": {
+    "drainEventsPerSec": {
+      "runs": [
+        261,
+        244,
+        288
+      ],
+      "median": 261
+    },
+    "steadyLagMs": {
+      "p50Runs": [
+        53,
+        50,
+        50
+      ],
+      "p99Runs": [
+        98,
+        96,
+        86
+      ],
+      "p50Median": 50,
+      "p99Median": 96
+    }
+  }
+}

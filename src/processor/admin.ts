@@ -3,6 +3,7 @@ import Fastify, { type FastifyInstance } from "fastify";
 import type { Producer } from "kafkajs";
 import type { Pool } from "../db/pool.ts";
 import { registry } from "../obs/metrics.ts";
+import { registerLearn } from "./learn.ts";
 import type { PartitionLag } from "../obs/lag.ts";
 import { discardEntries, executeReplay, planReplay, recordDryRun, ReplayRefused, type ReplayFilter } from "../replay/replay.ts";
 
@@ -13,6 +14,7 @@ export interface AdminDeps {
   adminToken: string;
   downstreamUrl: string;
   lag: () => { at: string | null; partitions: PartitionLag[] };
+  learnMode?: boolean;
 }
 
 function tokenOk(header: string | undefined, expected: string): boolean {
@@ -35,6 +37,7 @@ export function buildAdmin(deps: AdminDeps): FastifyInstance {
   });
 
   app.get("/healthz", async () => ({ ok: true }));
+  if (deps.learnMode) registerLearn(app, deps);
   app.get("/metrics", async (_req, reply) => reply.header("content-type", registry.contentType).send(await registry.metrics()));
   app.get("/admin/lag", async () => deps.lag());
 

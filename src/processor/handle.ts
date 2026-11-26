@@ -7,6 +7,7 @@ import { sabotaged } from "../lab/sabotage.ts";
 import { sendToDlq, type DlqSink } from "./dlq.ts";
 import { fetchEta, type EtaResponse } from "./etaClient.ts";
 import { withRetry, type AttemptRecord, type RetryPolicy } from "./retry.ts";
+import { pace, posKey, recordStep } from "./steps.ts";
 import { downstreamDuration, downstreamRequests, failuresTotal, retriesTotal } from "../obs/metrics.ts";
 
 export interface RawMessage {
@@ -34,8 +35,12 @@ function sourceOf(msg: RawMessage) {
 }
 
 export async function handleMessage(deps: Deps, msg: RawMessage): Promise<Outcome> {
+  const key = posKey(msg.partition, msg.offset);
+  recordStep(key, "consume", "ok", `partition ${msg.partition} offset ${msg.offset}`, { key: msg.key, headers: msg.headers });
+  await pace(msg.headers);
   const decoded = decodeEvent(msg.value, msg.key);
   if (!decoded.ok) {
+    recordStep(key, "schema", "fail", `${decoded.reason}: ${decoded.issues.join("; ")}`, { reason: decoded.reason, issues: decoded.issues });
     const where = await sendToDlq(deps.pool, deps.dlq, {
       reason: decoded.reason,
       detail: { issues: decoded.issues },
@@ -44,9 +49,11 @@ export async function handleMessage(deps: Deps, msg: RawMessage): Promise<Outcom
       source: sourceOf(msg),
     });
     failuresTotal.inc({ reason: decoded.reason });
+    recordStep(key, "dlq", "info", `sent to DLQ partition ${where.partition} offset ${where.offset}`, { reason: decoded.reason, dlq: where });
     deps.log.warn({ reason: decoded.reason, issues: decoded.issues, partition: msg.partition, offset: msg.offset, dlq: where }, "dead-lettered");
     return "dlq";
   }
+  recordStep(key, "schema", "ok", `v${decoded.event.schemaVersion} ${decoded.event.type} seq ${decoded.event.seq}`, decoded.event);
   return applyEvent(deps, decoded.event, msg);
 }
 
@@ -74,16 +81,24 @@ async function readCurrent(db: Pick<Pool, "query">, shipmentId: string, lock: bo
 async function applyEvent(deps: Deps, event: ShipmentEvent, msg: RawMessage): Promise<Outcome> {
   const ctx = { shipmentId: event.shipmentId, eventId: event.eventId, seq: event.seq, partition: msg.partition, offset: msg.offset, traceId: event.traceId };
   const guard = sabotaged("no_transition_guard") ? decideLegacy : decide;
+  const key = posKey(msg.partition, msg.offset);
+  await pace(msg.headers);
 
   // Cheap read-only checks first, so a duplicate or a stale event never costs a downstream call.
   if (!sabotaged("no_dedupe")) {
     const seen = await deps.pool.query("SELECT outcome FROM processed_events WHERE event_id = $1", [event.eventId]);
     if (seen.rowCount) {
+      recordStep(key, "dedupe", "skip", `event id already processed (${seen.rows[0].outcome})`, { eventId: event.eventId, firstOutcome: seen.rows[0].outcome });
       deps.log.info({ ...ctx, firstOutcome: seen.rows[0].outcome }, "duplicate skipped");
       return "duplicate";
     }
   }
+  recordStep(key, "dedupe", "ok", "new event id", { eventId: event.eventId });
+  await pace(msg.headers);
   const preview = guard(await readCurrent(deps.pool, event.shipmentId, false), event);
+  recordStep(key, "state", preview.kind === "apply" ? "ok" : preview.kind === "stale" ? "skip" : "fail",
+    preview.kind === "apply" ? `${preview.from ?? "(new)"} -> ${preview.to}` : `${preview.kind}: ${preview.reason}`, preview);
+  await pace(msg.headers);
 
   // @learn:downstream-call
   let eta: EtaResponse | undefined;
@@ -94,6 +109,8 @@ async function applyEvent(deps: Deps, event: ShipmentEvent, msg: RawMessage): Pr
         downstreamRequests.inc({ result: a.ok ? "ok" : "error" });
         downstreamDuration.observe(a.ms / 1000);
         if (a.backoffMs !== undefined) retriesTotal.inc();
+        recordStep(key, "downstream", a.ok ? "ok" : a.backoffMs !== undefined ? "retry" : "fail",
+          a.ok ? `attempt ${a.attempt} ok in ${a.ms}ms` : `attempt ${a.attempt} failed: ${a.error}${a.backoffMs !== undefined ? `, retry in ${a.backoffMs}ms` : ""}`, a);
         deps.log.info({ ...ctx, attempt: a }, a.ok ? "eta ok" : "eta attempt failed");
       });
     attempts = r.attempts;
@@ -105,11 +122,15 @@ async function applyEvent(deps: Deps, event: ShipmentEvent, msg: RawMessage): Pr
         shipmentId: event.shipmentId, eventId: event.eventId, seq: event.seq, source: sourceOf(msg),
       });
       failuresTotal.inc({ reason });
+      recordStep(key, "dlq", "info", `${reason} after ${r.attempts.length} attempts`, { reason, lastError: r.lastError });
       deps.log.warn({ ...ctx, reason, attempts: r.attempts.length, lastError: r.lastError }, "dead-lettered");
       return "dlq";
     }
     eta = r.value;
+  } else {
+    recordStep(key, "downstream", "skip", preview.kind === "apply" ? `no ETA needed for ${preview.to}` : "not called: event will not be applied");
   }
+  await pace(msg.headers);
   // @learn:end downstream-call
   const downstreamMs = attempts.reduce((sum, a) => sum + a.ms + (a.backoffMs ?? 0), 0);
 
@@ -125,6 +146,7 @@ async function applyEvent(deps: Deps, event: ShipmentEvent, msg: RawMessage): Pr
     // Authoritative decision under the row lock; the preview above was only to decide whether to call downstream.
     decision = guard(await readCurrent(client, event.shipmentId, true), event);
 
+    // @learn:write-record
     if (decision.kind === "apply") {
       await client.query(
         `INSERT INTO shipments (shipment_id, status, last_event_id, last_seq, last_location, eta_at, eta_source, last_trace_id)
@@ -153,8 +175,11 @@ async function applyEvent(deps: Deps, event: ShipmentEvent, msg: RawMessage): Pr
         detail: { from: decision.from, to: decision.to, message: decision.reason },
         shipmentId: event.shipmentId, eventId: event.eventId, seq: event.seq, source: sourceOf(msg),
       });
+      recordStep(key, "dlq", "info", `illegal_transition ${decision.from} -> ${decision.to}`, { reason: "illegal_transition" });
     }
+    // @learn:end write-record
     await client.query("COMMIT");
+    recordStep(key, "write", decision.kind === "apply" ? "ok" : "info", decision.kind === "apply" ? "tracking record + history committed" : `history only (${outcome})`, { outcome, decision });
     deps.log.info({ ...ctx, decision }, outcome);
     return outcome;
   } catch (e) {
