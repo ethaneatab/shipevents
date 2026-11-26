@@ -27,3 +27,4 @@
 - [`q06-lost-on-restart.mp4`](problems/q06-lost-on-restart.mp4) — 重启以后，少了一条事件
 - [`q07-duplicate-history.mp4`](problems/q07-duplicate-history.mp4) — 同一条事件，历史里出现三次
 - [`q08-poison-message.mp4`](problems/q08-poison-message.mp4) — 一条坏消息，卡住了整个分区
+- [`q09-ci-topic-wait.mp4`](problems/q09-ci-topic-wait.mp4) — 第一次在 GitHub 上跑持续集成，刚建好的主题又报错了

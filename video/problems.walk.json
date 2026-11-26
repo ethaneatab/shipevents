@@ -470,5 +470,76 @@
         "text": "旧代码直接解析，坏字节在这里抛异常，客户端就一直重试这一条。"
       }
     ]
+  },
+  {
+    "id": "q09-ci-topic-wait",
+    "title": "第一次在 GitHub 上跑持续集成，刚建好的主题又报错了",
+    "subtitle": "报错来自建主题时卡夫卡客户端自己的等待",
+    "lang": "typescript",
+    "code": "if (missing.length > 0) {\n  await admin.createTopics({ waitForLeaders: false, topics: missing.map((topic) => ({ topic, numPartitions, replicationFactor: 1 })) });\n  // Not waitForLeaders: kafkajs's own wait throws \"This server does not host this topic-partition\"\n  // when the broker lags (seen on CI), so poll the metadata here until every partition has a leader.\n  const deadline = Date.now() + 15_000;\n  for (;;) {\n    const md = await admin.fetchTopicMetadata({ topics: missing }).catch(() => undefined);\n    const ready = md?.topics.every((t) => t.partitions.length === numPartitions && t.partitions.every((p) => p.leader >= 0));\n    if (ready || Date.now() > deadline) break;\n    await new Promise((r) => setTimeout(r, 100));\n  }\n}",
+    "segments": [
+      {
+        "lines": [
+          2
+        ],
+        "text": "修复后，建主题时不让客户端等。"
+      },
+      {
+        "lines": [
+          3,
+          4
+        ],
+        "text": "注释写明原因：它自己的等待在服务器跟不上时会抛错，持续集成上见过。"
+      },
+      {
+        "lines": [
+          5,
+          6,
+          7,
+          8,
+          9
+        ],
+        "text": "等待全部交给我们自己的轮询：分区数对得上，每个分区都有领导者，才往下走。"
+      },
+      {
+        "lines": [],
+        "text": "怎么证明修好了：写了一个单元测试，模拟一个跟不上的服务器。旧写法直接抛出同样的错误，修复后等到第四次查询就通过了。推上去以后，持续集成也绿了。"
+      },
+      {
+        "lines": [],
+        "text": "面试里一句话：以为修好的偶发问题，要看调用栈确认修的是不是那一处。"
+      }
+    ],
+    "example_code": "if (missing.length > 0) {\n  await admin.createTopics({ waitForLeaders: true, topics: missing.map((topic) => ({ topic, numPartitions, replicationFactor: 1 })) });\n  // createTopics can return before every partition has a leader that the broker will serve;\n  // a produce in that window fails with \"This server does not host this topic-partition\".\n  const deadline = Date.now() + 15_000;\n  for (;;) {\n    const md = await admin.fetchTopicMetadata({ topics: missing }).catch(() => undefined);\n    const ready = md?.topics.every((t) => t.partitions.length === numPartitions && t.partitions.every((p) => p.leader >= 0));\n    if (ready || Date.now() > deadline) break;\n    await new Promise((r) => setTimeout(r, 100));\n  }\n}",
+    "example_segments": [
+      {
+        "lines": [],
+        "text": "现象是这样的：仓库推上去以后，第一次跑持续集成，重启那个测试在准备阶段就失败了。报错还是那句，这台服务器不托管这个分区。"
+      },
+      {
+        "lines": [],
+        "text": "这个问题之前在本机只出现过一次，我当时加了轮询，以为修好了。"
+      },
+      {
+        "lines": [],
+        "text": "我先看调用栈。错误不是发消息时抛的，而是从建主题那个调用里面抛出来的，在客户端等领导者的那段逻辑里。"
+      },
+      {
+        "lines": [
+          2
+        ],
+        "text": "修复前，建主题时让客户端自己等领导者。客户端只会重试领导者不可用这一种错，碰到分区还不归这台服务器管，就直接抛出去了。"
+      },
+      {
+        "lines": [
+          5,
+          6,
+          7,
+          8,
+          9
+        ],
+        "text": "所以我后面写的轮询，根本没有机会执行。"
+      }
+    ]
   }
 ]

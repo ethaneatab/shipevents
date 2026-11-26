@@ -21,9 +21,9 @@ export async function ensureTopics(kafka: kafkajs.Kafka, topics: string[], numPa
     const missing = topics.filter((t) => !existing.has(t));
     // @learn:topic-ready
     if (missing.length > 0) {
-      await admin.createTopics({ waitForLeaders: true, topics: missing.map((topic) => ({ topic, numPartitions, replicationFactor: 1 })) });
-      // createTopics can return before every partition has a leader that the broker will serve;
-      // a produce in that window fails with "This server does not host this topic-partition".
+      await admin.createTopics({ waitForLeaders: false, topics: missing.map((topic) => ({ topic, numPartitions, replicationFactor: 1 })) });
+      // Not waitForLeaders: kafkajs's own wait throws "This server does not host this topic-partition"
+      // when the broker lags (seen on CI), so poll the metadata here until every partition has a leader.
       const deadline = Date.now() + 15_000;
       for (;;) {
         const md = await admin.fetchTopicMetadata({ topics: missing }).catch(() => undefined);

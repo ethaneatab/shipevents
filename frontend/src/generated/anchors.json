@@ -89,6 +89,16 @@
     "start": 3,
     "end": 8
   },
+  "q09-create-topics-before": {
+    "path": "docs/problems/snippets/q09-create-topics.ts",
+    "start": 6,
+    "end": 17
+  },
+  "q09-topics-test": {
+    "path": "test/unit/topics.test.ts",
+    "start": 11,
+    "end": 39
+  },
   "replay-execute": {
     "path": "src/replay/replay.ts",
     "start": 126,

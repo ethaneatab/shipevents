@@ -62,7 +62,8 @@ test("sample event: stages light up in order with real data and real source link
   for (const s of ORDER) checkSourceLink((await page.getByTestId(`src-${s}`).getAttribute("href"))!);
 
   await page.getByTestId("video-schema").click();
-  await expect(page.getByTestId("videoslot-schema")).toHaveText("视频待生成");
+  // the committed video plays; before the videos were generated the slot said so instead
+  await expect(page.locator("video[data-testid=videoslot-schema]").or(page.getByTestId("videoslot-schema").filter({ hasText: "视频待生成" }))).toBeVisible();
 });
 
 test("branches: duplicate, stale, malformed, outage then dry-run and replay", async ({ page }) => {
@@ -110,5 +111,5 @@ test("problems tab: expand a problem", async ({ page }) => {
   const p = page.locator("[data-testid=problems] details.problem").first();
   await p.locator("summary").click();
   await expect(p.locator(".answer")).toContainText("现象");
-  await expect(p.locator(".video-missing")).toHaveText("视频待生成");
+  await expect(p.locator("video.video").or(p.locator(".video-missing", { hasText: "视频待生成" }))).toBeVisible();
 });

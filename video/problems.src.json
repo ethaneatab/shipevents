@@ -25,7 +25,7 @@
     "title": "刚建好的主题，第一条消息就发不出去",
     "subtitle": "偶发报错，这台服务器不托管这个分区",
     "lang": "typescript",
-    "code_from": { "path": "src/kafka/client.ts", "anchor": "topic-ready" },
+    "code_from": { "path": "docs/problems/snippets/q09-create-topics.ts", "anchor": "q09-create-topics-before" },
     "before_from": { "path": "docs/problems/snippets/q02-create-topics.ts", "anchor": "q02-create-topics-before" },
     "before_segments": [
       { "lines": [], "text": "现象是，整套测试跑了很多次，只有一次出现一个跳过的用例，旁边是一条卡夫卡协议错误。" },
@@ -164,6 +164,83 @@
       { "lines": [], "text": "坏消息带着原因和原始字节进死信队列，分区继续往前走。" },
       { "lines": [], "text": "证明：同一个分区依次发好、坏、坏、好，测试断言最后那条好的照样被处理。" },
       { "lines": [], "text": "面试一句话：毒丸消息要变成一条有原因的死信，而不是一个崩溃循环。" }
+    ]
+  },
+  {
+    "id": "q09-ci-topic-wait",
+    "title": "第一次在 GitHub 上跑持续集成，刚建好的主题又报错了",
+    "subtitle": "报错来自建主题时卡夫卡客户端自己的等待",
+    "lang": "typescript",
+    "code_from": {
+      "path": "src/kafka/client.ts",
+      "anchor": "topic-ready"
+    },
+    "before_from": {
+      "path": "docs/problems/snippets/q09-create-topics.ts",
+      "anchor": "q09-create-topics-before"
+    },
+    "before_segments": [
+      {
+        "lines": [],
+        "text": "现象是这样的：仓库推上去以后，第一次跑持续集成，重启那个测试在准备阶段就失败了。报错还是那句，这台服务器不托管这个分区。"
+      },
+      {
+        "lines": [],
+        "text": "这个问题之前在本机只出现过一次，我当时加了轮询，以为修好了。"
+      },
+      {
+        "lines": [],
+        "text": "我先看调用栈。错误不是发消息时抛的，而是从建主题那个调用里面抛出来的，在客户端等领导者的那段逻辑里。"
+      },
+      {
+        "lines": [
+          2
+        ],
+        "text": "修复前，建主题时让客户端自己等领导者。客户端只会重试领导者不可用这一种错，碰到分区还不归这台服务器管，就直接抛出去了。"
+      },
+      {
+        "lines": [
+          5,
+          6,
+          7,
+          8,
+          9
+        ],
+        "text": "所以我后面写的轮询，根本没有机会执行。"
+      }
+    ],
+    "segments": [
+      {
+        "lines": [
+          2
+        ],
+        "text": "修复后，建主题时不让客户端等。"
+      },
+      {
+        "lines": [
+          3,
+          4
+        ],
+        "text": "注释写明原因：它自己的等待在服务器跟不上时会抛错，持续集成上见过。"
+      },
+      {
+        "lines": [
+          5,
+          6,
+          7,
+          8,
+          9
+        ],
+        "text": "等待全部交给我们自己的轮询：分区数对得上，每个分区都有领导者，才往下走。"
+      },
+      {
+        "lines": [],
+        "text": "怎么证明修好了：写了一个单元测试，模拟一个跟不上的服务器。旧写法直接抛出同样的错误，修复后等到第四次查询就通过了。推上去以后，持续集成也绿了。"
+      },
+      {
+        "lines": [],
+        "text": "面试里一句话：以为修好的偶发问题，要看调用栈确认修的是不是那一处。"
+      }
     ]
   }
 ]

@@ -9,7 +9,7 @@ import { fileURLToPath } from "node:url";
 
 export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 export const OUT = path.join(ROOT, "frontend/src/generated/anchors.json");
-const SCAN = ["src", "frontend/src", "docs/problems/snippets", "scripts"];
+const SCAN = ["src", "frontend/src", "docs/problems/snippets", "scripts", "test"];
 const EXT = /\.(ts|tsx|sql|sh)$/;
 const OPEN = /^\s*(?:\/\/|--|#)\s*@learn:([a-z0-9][a-z0-9-]*)\s*$/;
 const CLOSE = /^\s*(?:\/\/|--|#)\s*@learn:end\s+([a-z0-9][a-z0-9-]*)\s*$/;

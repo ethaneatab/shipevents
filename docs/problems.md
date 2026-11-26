@@ -65,6 +65,8 @@ const ready = md?.topics.every((t) => t.partitions.length === numPartitions && t
 
 **怎么证明修好了**：老实说，偶发问题没有一个「修复前必红」的测试。证据只有：修复后连续三轮全套测试 `35 passed`，之后所有轮次也没再出现。这一点在面试里要如实说。
 
+**后续**：推上 GitHub 后，第一次 CI 又撞上了同一个报错，而且查清了真正抛错的地方，见 [q09](#q09-ci-topic-wait)。
+
 **面试怎么讲**：S 测试偶发失败，一次。T 不想靠重跑糊过去。A 读懂报错，判断是「创建成功」和「可用」之间有时间差，改成等条件成立。R 之后没再出现；同时承认偶发问题只能用观察证明。
 
 ## q03 我以为慢在下游，其实是在排队 【真实踩坑】
@@ -244,3 +246,45 @@ if (!decoded.ok) await sendToDlq(…, { reason: decoded.reason, detail: { issues
 **怎么证明修好了**：`test/integration/malformed.test.ts`：同一个分区依次发「好、坏、非 JSON、好」，最后那条好的照样被应用；死信带原因和原始字节。
 
 **面试怎么讲**：S 一条坏消息让一个分区停摆。T 坏消息不能阻塞好消息。A 解码不抛异常，坏消息带原因进 DLQ。R 分区持续前进，DLQ 里能直接看到哪个字段错了。
+
+## q09 第一次在 GitHub 上跑 CI，刚建好的 topic 又报错了 【真实踩坑】
+<!-- id: q09-ci-topic-wait -->
+
+**现象**：仓库推到 GitHub，第一次 CI 的集成测试里，`restart.test.ts` 在准备阶段就失败了，报的还是 [q02](#q02-topic-not-ready) 那句：
+
+```text
+FAIL  test/integration/restart.test.ts
+KafkaJSProtocolError: This server does not host this topic-partition
+ ❯ Broker.metadata node_modules/kafkajs/src/broker/index.js:177:12
+ ❯ retryOnLeaderNotAvailable.delay node_modules/kafkajs/src/admin/index.js:175:55
+```
+
+**在哪里**：[src/kafka/client.ts](../src/kafka/client.ts#L23-L34 "anchor:topic-ready")；修复前（也就是 q02 修完以后的样子）冻结在 [docs/problems/snippets/q09-create-topics.ts](problems/snippets/q09-create-topics.ts#L6-L17 "anchor:q09-create-topics-before")；测试 [test/unit/topics.test.ts](../test/unit/topics.test.ts#L11-L39 "anchor:q09-topics-test")。
+
+**怎么定位**：
+- q02 修完以后本机再没出现过，我以为修好了。
+- 这次有完整的调用栈：错误不是 `producer.send()` 抛的，是 `admin.createTopics()` 里面、kafkajs 自己「等 leader」的那段（`retryOnLeaderNotAvailable`）抛的。
+- 读 kafkajs：那段只重试 `LEADER_NOT_AVAILABLE`。broker 还没开始服务这个分区时回的是 `UNKNOWN_TOPIC_OR_PARTITION`，它不重试，直接抛。
+- 所以 q02 加的轮询根本没机会执行：异常在它前面一行就出去了。q02 修的方向对，位置错了。
+
+**怎么解决**：建 topic 时关掉 kafkajs 自己的等待，等待全部交给我们自己的轮询（分区数对得上、每个分区都有 leader，最多 15 秒）。
+
+```ts
+// 修复前
+await admin.createTopics({ waitForLeaders: true, topics: … });
+// 修复后
+await admin.createTopics({ waitForLeaders: false, topics: … });
+// …然后照旧轮询 fetchTopicMetadata，直到每个分区都有 leader
+```
+
+**怎么证明修好了**：`test/unit/topics.test.ts` 用一个假的 admin 模拟「跟不上的 broker」：前三次查元数据分区都没有 leader，而且只要让它自己等 leader 就抛 CI 上那句错。旧写法：
+
+```text
+× ensureTopics on a broker that lags behind its own createTopics > waits for every partition to have a leader instead of failing 4ms
+     → promise rejected "Error: This server does not host this top…" instead of resolving
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+```
+
+修复后通过，第四次查询拿到 leader。推上去以后 CI 是绿的。
+
+**面试怎么讲**：S 一个之前「修好了」的偶发错误，在第一次 CI 上又出现了。T 要确认上次到底修没修到点上。A 这次有调用栈，发现异常是客户端库自己的等待逻辑抛的，它只重试一种错误码，我的轮询在它后面根本没执行；关掉库的等待、全部用自己的条件轮询，并写了一个模拟慢 broker 的单测（A）。旧写法单测复现同一个报错，修复后通过，CI 也绿了（R）。
