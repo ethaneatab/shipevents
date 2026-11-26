@@ -4,7 +4,7 @@ A TypeScript service that consumes shipment events from Kafka, validates them, t
 
 ![learn page preview](docs/learn-preview.gif)
 
-Full walkthrough video: [releases/tag/learn-video](https://github.com/ethaneatab/shipevents/releases/tag/learn-video) · Interview questions: [docs/interview.md](docs/interview.md) · Day-to-day problems: [docs/problems.md](docs/problems.md) · Tutorial: [docs/tutorial/](docs/tutorial/) · Runbook: [docs/runbook.md](docs/runbook.md) · Replay procedure: [docs/replay.md](docs/replay.md)
+Walkthrough videos (Chinese, one per stage, narration synthesized locally with TTS): [docs/videos/](docs/videos/README.md) · Interview questions: [docs/interview.md](docs/interview.md) · Day-to-day problems: [docs/problems.md](docs/problems.md) · Tutorial: [docs/tutorial/](docs/tutorial/) · Runbook: [docs/runbook.md](docs/runbook.md) · Replay procedure: [docs/replay.md](docs/replay.md)
 
 ## Architecture
 
